@@ -1,0 +1,23 @@
+# Credenziali locali — mai committare
+.env
+.env.local
+.env.*
+
+# File di sistema
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Log e cache
+*.log
+cache/ Credenziali e configurazione locale: mai committare
+.env
+
+# File temporanei / log
+*.log
+.DS_Store
