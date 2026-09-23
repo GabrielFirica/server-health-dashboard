@@ -10,15 +10,12 @@
  *      Se la connessione fallisce la pagina NON si interrompe: mostra il badge
  *      rosso "Database: errore" e continua con le altre sezioni.
  *   2. Spazio disco  -> `df -h /`   (tabella con Filesystem/Size/Used/Avail/Use%)
- *   3. Uptime        -> `uptime -p`
- *   4. Ultime 10 righe di /var/log/apache2/error.log (tail via shell, con
- *      fallback in PHP puro tramite file() + array_slice()).
  *
  * Sicurezza:
  *   - Se shell_exec non è disponibile (funzione disabilitata in php.ini)
  *     viene mostrato "non disponibile" invece di generare un errore fatale.
- *   - Tutto ciò che proviene dal sistema (output di shell, righe di log)
- *     passa da htmlspecialchars() prima di essere stampato.
+ *   - Tutto ciò che proviene dal sistema (output di shell) passa da
+ *     htmlspecialchars() prima di essere stampato.
  *   - Il messaggio di errore del database non viene mai mostrato all'utente:
  *     finisce solo in error_log().
  *
@@ -151,61 +148,6 @@ if ($diskRaw === null) {
     }
 }
 
-// ===========================================================================
-// 3. Uptime — uptime -p
-// ===========================================================================
-
-$uptime     = run_command('uptime -p');
-$uptimeNote = null;
-
-if ($uptime === null) {
-    // Fallback: alcune distribuzioni non supportano l'opzione -p.
-    $uptime = run_command('uptime');
-    if ($uptime === null) {
-        $uptimeNote = shell_available()
-            ? 'non disponibile'
-            : 'non disponibile (shell_exec disabilitato)';
-    }
-}
-
-// ===========================================================================
-// 4. Ultime 10 righe di error.log
-// ===========================================================================
-
-/** @var string[] $logLines */
-$logLines  = [];
-$logPath   = null;
-$logSource = null;
-
-$candidateLogs = [
-    '/var/log/apache2/error.log',   // Debian / Ubuntu
-    '/var/log/httpd/error_log',     // RHEL / CentOS
-];
-
-foreach ($candidateLogs as $candidate) {
-    if (is_readable($candidate)) {
-        $logPath = $candidate;
-        break;
-    }
-}
-
-if ($logPath === null) {
-    $logPath = $candidateLogs[0]; // mostrato comunque come riferimento
-}
-
-// Tentativo 1: tail via shell (mantiene il percorso fuori dalla shell con escapeshellarg).
-$tailOutput = run_command('tail -n 10 ' . escapeshellarg($logPath));
-if ($tailOutput !== null) {
-    $logLines  = preg_split('/\R/', $tailOutput) ?: [];
-    $logSource = 'shell (tail -n 10)';
-} elseif (is_readable($logPath)) {
-    // Tentativo 2: PHP puro, nessuna dipendenza dalla shell.
-    $all = @file($logPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    if (is_array($all)) {
-        $logLines  = array_slice($all, -10);
-        $logSource = 'PHP (file + array_slice)';
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="it">
@@ -257,40 +199,6 @@ if ($tailOutput !== null) {
                         <?php endforeach; ?>
                     </tbody>
                 </table>
-            <?php endif; ?>
-        </section>
-
-        <section class="card">
-            <h2>Uptime (<code>uptime -p</code>)</h2>
-
-            <?php if ($uptimeNote !== null): ?>
-                <p class="notice"><?= h($uptimeNote) ?></p>
-            <?php else: ?>
-                <p class="uptime"><?= h($uptime) ?></p>
-            <?php endif; ?>
-        </section>
-
-        <section class="card">
-            <h2>Ultime 10 righe di <code><?= h($logPath) ?></code></h2>
-
-            <?php if ($logLines === []): ?>
-                <p class="notice">
-                    Nessun log disponibile.
-                    <?php if (!shell_available()): ?>
-                        (shell_exec disabilitato)
-                    <?php elseif (!is_readable($logPath)): ?>
-                        (file non leggibile dall'utente del web server)
-                    <?php endif; ?>
-                </p>
-            <?php else: ?>
-                <?php if ($logSource !== null): ?>
-                    <p class="log-source">Origine: <?= h($logSource) ?></p>
-                <?php endif; ?>
-                <pre class="log"><?php
-                    foreach ($logLines as $line) {
-                        echo h($line) . "\n";
-                    }
-                ?></pre>
             <?php endif; ?>
         </section>
     </main>
